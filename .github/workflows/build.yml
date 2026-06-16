@@ -7,22 +7,20 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
       - uses: actions/setup-go@v5
         with:
           go-version: '1.23'
 
       - uses: nttld/setup-ndk@v1
+        id: ndk
         with:
-          ndk-version: r26d
-          add-to-path: true
-
-      - name: Clone sing-box-for-android
-        run: git clone --depth 1 https://github.com/SagerNet/sing-box-for-android
-
-      - name: Show structure
-        run: |
-          ls -la sing-box-for-android
-          find sing-box-for-android -name "Makefile" -o -name "*.go" | head -20
+          ndk-version: r28
+          add-to-path: false
 
       - name: Install gomobile
         run: |
@@ -30,12 +28,25 @@ jobs:
           go install golang.org/x/mobile/cmd/gobind@latest
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
-      - name: Build libcore
-        working-directory: sing-box-for-android
+      - name: Clone sing-box-for-android
+        run: git clone --depth 1 https://github.com/SagerNet/sing-box-for-android sfa
+
+      - name: Show structure
         run: |
-          export PATH=$PATH:$(go env GOPATH)/bin
+          ls -la sfa
+          cat sfa/libbox/build.gradle.kts 2>/dev/null || echo "no libbox/build.gradle"
+          find sfa -maxdepth 3 -type d
+
+      - name: Build libbox aar
+        working-directory: sfa
+        env:
+          ANDROID_NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+          NDK_HOME: ${{ steps.ndk.outputs.ndk-path }}
+        run: |
           gomobile init
-          make libcore || make lib_install || (cd libcore && make) || true
+          ./gradlew :libbox:assembleRelease --no-daemon --stacktrace || \
+          ./gradlew :libcore:assembleRelease --no-daemon --stacktrace || \
+          ./gradlew assembleRelease --no-daemon --stacktrace
           find . -name "*.aar"
 
       - uses: actions/upload-artifact@v4
@@ -43,4 +54,5 @@ jobs:
         with:
           name: libcore-aar
           path: |
-            sing-box-for-android/**/*.aar
+            sfa/**/*.aar
+            sfa/**/outputs/**/*
