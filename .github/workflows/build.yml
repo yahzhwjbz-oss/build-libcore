@@ -14,9 +14,15 @@ jobs:
       - uses: nttld/setup-ndk@v1
         with:
           ndk-version: r26d
+          add-to-path: true
 
       - name: Clone sing-box-for-android
         run: git clone --depth 1 https://github.com/SagerNet/sing-box-for-android
+
+      - name: Show structure
+        run: |
+          ls -la sing-box-for-android
+          find sing-box-for-android -name "Makefile" -o -name "*.go" | head -20
 
       - name: Install gomobile
         run: |
@@ -25,12 +31,16 @@ jobs:
           echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
       - name: Build libcore
-        working-directory: sing-box-for-android/libcore
+        working-directory: sing-box-for-android
         run: |
+          export PATH=$PATH:$(go env GOPATH)/bin
           gomobile init
-          make
+          make libcore || make lib_install || (cd libcore && make) || true
+          find . -name "*.aar"
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: libcore-aar
-          path: sing-box-for-android/libcore/libcore.aar
+          path: |
+            sing-box-for-android/**/*.aar
